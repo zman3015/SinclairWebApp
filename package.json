@@ -31,7 +31,7 @@
     "date-fns": "^4.1.0",
     "firebase": "^12.6.0",
     "lucide-react": "^0.540.0",
-    "next": "^15.3.2",
+    "next": "^15.3.3",
     "pdf-lib": "^1.17.1",
     "qr-code-styling": "^1.9.2",
     "qrcode": "^1.5.4",
@@ -53,7 +53,7 @@
     "@types/react": "^18.3.22",
     "@types/react-dom": "^18.3.7",
     "eslint": "^9.27.0",
-    "eslint-config-next": "15.1.7",
+    "eslint-config-next": "15.3.3",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3"
