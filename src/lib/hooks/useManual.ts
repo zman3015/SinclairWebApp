@@ -12,8 +12,10 @@ export function useManuals(equipmentId?: string) {
         ? await ManualService.getByEquipmentId(equipmentId)
         : await ManualService.getAll()
 
-      if (!result.error) {
-        setManuals(result.data?.items || result.data || [])
+      if (!result.error && result.data) {
+        // Handle both array and paginated result
+        const items = Array.isArray(result.data) ? result.data : result.data.items
+        setManuals(items || [])
       }
       setLoading(false)
     }

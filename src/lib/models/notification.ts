@@ -66,7 +66,7 @@ export const NotificationSchema = BaseDocumentSchema.extend({
   scheduledFor: z.date().optional(),
   expiresAt: z.date().optional(),
 
-  metadata: z.record(z.unknown()).optional()
+  metadata: z.record(z.string(), z.unknown()).optional()
 })
 
 export type CreateNotificationInput = Omit<Notification, keyof BaseDocument>

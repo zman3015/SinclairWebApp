@@ -21,8 +21,10 @@ export function useInvoices(clientId?: string) {
     if (result.error) {
       setError(result.error)
       setInvoices([])
-    } else {
-      setInvoices(result.data?.items || result.data || [])
+    } else if (result.data) {
+      // Handle both array and paginated result
+      const items = Array.isArray(result.data) ? result.data : result.data.items
+      setInvoices(items || [])
     }
     setLoading(false)
   }, [clientId])

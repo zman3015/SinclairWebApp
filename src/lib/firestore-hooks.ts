@@ -1,5 +1,5 @@
 // Firestore hooks for data persistence
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   collection,
   addDoc,
@@ -184,17 +184,7 @@ export function useFirestoreCollection(collectionName: string) {
   const [loading, setLoading] = useState(true)
   const { user } = useAuth()
 
-  useEffect(() => {
-    if (!user) {
-      setData([])
-      setLoading(false)
-      return
-    }
-
-    loadData()
-  }, [user, collectionName])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       console.log(`📡 Loading ${collectionName} from Firestore...`)
       const querySnapshot = await getDocs(collection(db, collectionName))
@@ -209,7 +199,17 @@ export function useFirestoreCollection(collectionName: string) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [collectionName])
+
+  useEffect(() => {
+    if (!user) {
+      setData([])
+      setLoading(false)
+      return
+    }
+
+    loadData()
+  }, [user, loadData])
 
   const addItem = async (itemData: GenericData) => {
     try {

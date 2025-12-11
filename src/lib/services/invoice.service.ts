@@ -211,7 +211,7 @@ class InvoiceServiceClass extends BaseService<Invoice> {
         }
 
         const dueDate = new Date(invoice.dueDate)
-        if (dueDate < now && invoice.status !== 'Paid') {
+        if (dueDate < now) {
           stats.overdue += invoice.amountDue
         }
       }
