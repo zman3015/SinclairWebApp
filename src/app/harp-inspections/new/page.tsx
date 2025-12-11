@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -17,7 +18,10 @@ import {
   XrayType,
   ImageType
 } from "@/lib/harp-types"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Plus, Trash2, CheckCircle, AlertCircle } from "lucide-react"
+import { HarpInspectionService } from "@/lib/services/harp-inspection.service"
+import { useAuth } from "@/contexts/AuthContext"
+import type { CreateHarpInspectionInput } from "@/lib/models/harp-inspection"
 
 // Form validation schema
 const harpFormSchema = z.object({
@@ -108,8 +112,12 @@ const defaultItems13to17 = [
 ]
 
 export default function NewHarpInspectionPage() {
+  const router = useRouter()
+  const { user } = useAuth()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const {
     register,
@@ -218,29 +226,97 @@ export default function NewHarpInspectionPage() {
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true)
+    setSaveError(null)
+    setSaveSuccess(false)
+
     try {
+      // Prepare inspection data for Firestore
+      const inspectionData: CreateHarpInspectionInput = {
+        status: 'Completed',
+        testType: data.testType as HarpTestType,
+        xrayTypes: data.xrayTypes as XrayType[],
+
+        // Use a placeholder clientId - in production this would come from form
+        clientId: 'placeholder-client-id',
+        clinicName: data.clinicName,
+        clinicAddress: data.clinicAddress,
+        clinicPhone: data.clinicPhone,
+        accountNumber: data.accountNumber,
+        roomNumber: data.roomNumber,
+
+        inspectionDate: data.inspectionDate,
+        technicianDate: data.technicianDate,
+
+        technicianId: user?.uid || 'unknown',
+        technicianName: data.technicianName,
+
+        equipmentMake: data.equipmentMake,
+        equipmentModel: data.equipmentModel,
+        controlSerial: data.controlSerial,
+        tubeSerial: data.tubeSerial,
+        xrisNumber: data.xrisNumber,
+        imageType: data.imageType as ImageType,
+
+        items1to12: data.items1to12.map(item => ({
+          ...item,
+          result: item.result as 'MS' | 'NI' | null
+        })),
+        techniqueRows: data.techniqueRows,
+        items13to17: data.items13to17.map(item => ({
+          ...item,
+          result: item.result as 'MS' | 'NI' | null
+        })),
+        item18KvCheck: data.item18KvCheck as 'Yes' | 'No' | null,
+        item19TimeCheck: data.item19TimeCheck as 'Yes' | 'No' | null,
+        item20HarpSpec: data.item20HarpSpec as 'Yes' | 'No' | null,
+
+        peeKv: data.peeKv,
+        peeMa: data.peeMa,
+        peeSec: data.peeSec,
+        beamAlignment: data.beamAlignment,
+        halfValueLayer: data.halfValueLayer,
+
+        notes: data.notes,
+      }
+
+      // Save to Firestore
+      const saveResult = await HarpInspectionService.create(inspectionData, user?.uid)
+
+      if (saveResult.error) {
+        throw new Error(saveResult.error.message || 'Failed to save inspection')
+      }
+
+      const savedInspection = saveResult.data
+
+      // Generate PDF
       const response = await fetch("/api/harp-inspection/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
 
-      if (!response.ok) throw new Error("Failed to generate PDF")
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `HARP-Inspection-${data.accountNumber}-${new Date().toISOString().split('T')[0]}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      }
 
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `HARP-Inspection-${data.accountNumber}-${new Date().toISOString().split('T')[0]}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      setSaveSuccess(true)
 
-      alert("PDF generated successfully!")
+      // Redirect to history page after 2 seconds
+      setTimeout(() => {
+        router.push('/harp-inspections')
+      }, 2000)
+
     } catch (error) {
-      console.error("Error generating PDF:", error)
-      alert("Failed to generate PDF. Please try again.")
+      console.error("Error saving inspection:", error)
+      setSaveError(error instanceof Error ? error.message : 'Failed to save inspection')
     } finally {
       setIsSubmitting(false)
     }
@@ -826,11 +902,32 @@ export default function NewHarpInspectionPage() {
         )}
 
         {/* Navigation Buttons */}
+        {/* Success/Error Messages */}
+        {saveSuccess && (
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center text-green-800">
+            <CheckCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Inspection saved successfully!</p>
+              <p className="text-sm">Redirecting to inspection history...</p>
+            </div>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center text-red-800">
+            <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Failed to save inspection</p>
+              <p className="text-sm">{saveError}</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between mt-6 mb-12">
           <Button
             type="button"
             onClick={prevStep}
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isSubmitting}
             variant="outline"
           >
             Previous
@@ -845,10 +942,10 @@ export default function NewHarpInspectionPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating PDF...
+                  Saving & Generating PDF...
                 </>
               ) : (
-                "Generate PDF Report"
+                "Submit & Generate PDF"
               )}
             </Button>
           )}

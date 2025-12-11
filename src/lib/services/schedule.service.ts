@@ -103,6 +103,28 @@ class ScheduleServiceClass extends BaseService<Schedule> {
 
     return { data: filtered }
   }
+
+  /**
+   * Get upcoming appointments count
+   */
+  async getUpcomingCount(daysAhead = 7): Promise<ServiceResult<number>> {
+    const result = await this.getUpcoming(daysAhead)
+    if (result.error) {
+      return { error: result.error }
+    }
+    return { data: result.data?.length || 0 }
+  }
+
+  /**
+   * Get today's appointments count
+   */
+  async getTodayCount(): Promise<ServiceResult<number>> {
+    const result = await this.getToday()
+    if (result.error) {
+      return { error: result.error }
+    }
+    return { data: result.data?.length || 0 }
+  }
 }
 
 export const ScheduleService = new ScheduleServiceClass()

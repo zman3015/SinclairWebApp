@@ -4,6 +4,7 @@ import "./globals.css";
 import ClientBody from "./ClientBody";
 import Script from "next/script";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body suppressHydrationWarning className="antialiased">
         <AuthProvider>
           <ClientBody>{children}</ClientBody>
+          <Toaster />
         </AuthProvider>
       </body>
     </html>

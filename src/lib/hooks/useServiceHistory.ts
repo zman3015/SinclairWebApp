@@ -12,10 +12,15 @@ export function useServiceHistory(equipmentId?: string) {
         ? await ServiceHistoryService.getByEquipmentId(equipmentId)
         : await ServiceHistoryService.getAll()
 
-      if (!result.error && result.data) {
-        // Handle both array and paginated result
-        const items = Array.isArray(result.data) ? result.data : result.data.items
-        setHistory(items || [])
+      if (!result.error) {
+        const data = result.data
+        if (Array.isArray(data)) {
+          setHistory(data)
+        } else if (data && 'items' in data) {
+          setHistory(data.items)
+        } else {
+          setHistory([])
+        }
       }
       setLoading(false)
     }

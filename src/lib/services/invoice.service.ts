@@ -219,6 +219,85 @@ class InvoiceServiceClass extends BaseService<Invoice> {
 
     return { data: stats }
   }
+
+  /**
+   * Get revenue for month-to-date
+   */
+  async getMonthToDateRevenue(): Promise<ServiceResult<number>> {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    return this.getRevenue(startOfMonth, now)
+  }
+
+  /**
+   * Get revenue for year-to-date
+   */
+  async getYearToDateRevenue(): Promise<ServiceResult<number>> {
+    const now = new Date()
+    const startOfYear = new Date(now.getFullYear(), 0, 1)
+    return this.getRevenue(startOfYear, now)
+  }
+
+  /**
+   * Get monthly revenue for the last N months
+   */
+  async getMonthlyRevenueTrend(months = 12): Promise<ServiceResult<Array<{ month: string; revenue: number }>>> {
+    const result = await this.getAll()
+    if (result.error) {
+      return { error: result.error }
+    }
+
+    const invoices = result.data?.items || []
+    const now = new Date()
+    const monthlyData: Record<string, number> = {}
+
+    // Initialize last N months
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      monthlyData[key] = 0
+    }
+
+    // Aggregate paid invoices by month
+    invoices.forEach(invoice => {
+      if (invoice.status === 'Paid' && invoice.paidDate) {
+        const paidDate = new Date(invoice.paidDate)
+        const key = `${paidDate.getFullYear()}-${String(paidDate.getMonth() + 1).padStart(2, '0')}`
+        if (monthlyData[key] !== undefined) {
+          monthlyData[key] += invoice.total
+        }
+      }
+    })
+
+    // Convert to array format
+    const trend = Object.entries(monthlyData).map(([month, revenue]) => ({
+      month,
+      revenue
+    }))
+
+    return { data: trend }
+  }
+
+  /**
+   * Get overdue invoice details
+   */
+  async getOverdueDetails(): Promise<ServiceResult<{ count: number; total: number; invoices: Invoice[] }>> {
+    const overdueResult = await this.getOverdue()
+    if (overdueResult.error) {
+      return { error: overdueResult.error }
+    }
+
+    const invoices = overdueResult.data || []
+    const total = invoices.reduce((sum, inv) => sum + inv.amountDue, 0)
+
+    return {
+      data: {
+        count: invoices.length,
+        total,
+        invoices
+      }
+    }
+  }
 }
 
 export const InvoiceService = new InvoiceServiceClass()

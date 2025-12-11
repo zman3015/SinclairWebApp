@@ -11,12 +11,13 @@ import {
 } from 'firebase/auth'
 import { doc, setDoc, getDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
+import { UserRoleType } from '@/lib/models/user'
 
 interface UserData {
   uid: string
   email: string
   displayName: string
-  role: 'admin' | 'user'
+  role: UserRoleType
   companyName?: string
   phone?: string
   createdAt: string
@@ -27,8 +28,12 @@ interface AuthContextType {
   userData: UserData | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, displayName: string, role: 'admin' | 'user', companyName?: string, phone?: string) => Promise<void>
+  signUp: (email: string, password: string, displayName: string, role: UserRoleType, companyName?: string, phone?: string) => Promise<void>
   signOut: () => Promise<void>
+  hasRole: (roles: UserRoleType | UserRoleType[]) => boolean
+  isAdmin: () => boolean
+  isTech: () => boolean
+  isViewer: () => boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,7 +42,11 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signIn: async () => {},
   signUp: async () => {},
-  signOut: async () => {}
+  signOut: async () => {},
+  hasRole: () => false,
+  isAdmin: () => false,
+  isTech: () => false,
+  isViewer: () => false
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -103,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     displayName: string,
-    role: 'admin' | 'user',
+    role: UserRoleType,
     companyName?: string,
     phone?: string
   ) => {
@@ -131,13 +140,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth)
   }
 
+  // Role checking functions
+  const hasRole = (roles: UserRoleType | UserRoleType[]): boolean => {
+    if (!userData) return false
+    const roleArray = Array.isArray(roles) ? roles : [roles]
+    return roleArray.includes(userData.role)
+  }
+
+  const isAdmin = (): boolean => {
+    return userData?.role === 'admin'
+  }
+
+  const isTech = (): boolean => {
+    return userData?.role === 'tech'
+  }
+
+  const isViewer = (): boolean => {
+    return userData?.role === 'viewer'
+  }
+
   const value = {
     user,
     userData,
     loading,
     signIn,
     signUp,
-    signOut
+    signOut,
+    hasRole,
+    isAdmin,
+    isTech,
+    isViewer
   }
 
   return (

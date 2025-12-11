@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { UserRoleType } from "@/lib/models/user"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,7 +25,7 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
     displayName: "",
-    role: "user" as "admin" | "user",
+    role: "tech" as UserRoleType,
     companyName: "",
     phone: ""
   })
@@ -102,7 +103,7 @@ export default function SignupPage() {
               <Label htmlFor="role">Account Type</Label>
               <Select
                 value={formData.role}
-                onValueChange={(value: "admin" | "user") => setFormData({ ...formData, role: value })}
+                onValueChange={(value: UserRoleType) => setFormData({ ...formData, role: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -114,18 +115,26 @@ export default function SignupPage() {
                       Admin - Full Access
                     </div>
                   </SelectItem>
-                  <SelectItem value="user">
+                  <SelectItem value="tech">
                     <div className="flex items-center">
                       <User className="h-4 w-4 mr-2" />
-                      Technician - Standard Access
+                      Technician - Edit Access
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="viewer">
+                    <div className="flex items-center">
+                      <User className="h-4 w-4 mr-2" />
+                      Viewer - Read Only
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
                 {formData.role === "admin"
-                  ? "Full access to all features, client management, and settings"
-                  : "Access to service tickets, equipment, and schedules"
+                  ? "Full access to all features including user management"
+                  : formData.role === "tech"
+                  ? "Can create, edit, and delete operational data"
+                  : "Read-only access to all data"
                 }
               </p>
             </div>

@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper function to get user role from Firestore
+    function getUserRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user can write (admin or tech)
+    function canWrite() {
+      return isAuthenticated() && (getUserRole() == 'admin' || getUserRole() == 'tech');
+    }
+
+    // Helper function to check if user can read (any authenticated user)
+    function canRead() {
+      return isAuthenticated();
+    }
+
+    // Manuals directory - for equipment manuals PDFs
+    match /manuals/{allPaths=**} {
+      // All authenticated users can read manuals
+      allow read: if canRead();
+
+      // Only admins and techs can upload/delete manuals
+      allow write: if canWrite();
+    }
+
+    // Profile images directory
+    match /profile-images/{allPaths=**} {
+      // All authenticated users can read profile images
+      allow read: if canRead();
+
+      // Users can upload their own profile image, admins can upload any
+      allow write: if isAuthenticated();
+    }
+
+    // HARP inspection PDFs (if needed for storage)
+    match /harp-pdfs/{allPaths=**} {
+      // All authenticated users can read HARP PDFs
+      allow read: if canRead();
+
+      // Only admins and techs can create/delete HARP PDFs
+      allow write: if canWrite();
+    }
+
+    // Deny access to all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

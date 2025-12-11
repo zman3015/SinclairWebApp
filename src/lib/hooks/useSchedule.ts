@@ -23,10 +23,15 @@ export function useSchedule(options?: { technicianId?: string; clientId?: string
 
       if (result.error) {
         setError(result.error)
-      } else if (result.data) {
-        // Handle both array and paginated result
-        const items = Array.isArray(result.data) ? result.data : result.data.items
-        setAppointments(items || [])
+      } else {
+        const data = result.data
+        if (Array.isArray(data)) {
+          setAppointments(data)
+        } else if (data && 'items' in data) {
+          setAppointments(data.items)
+        } else {
+          setAppointments([])
+        }
       }
       setLoading(false)
     }

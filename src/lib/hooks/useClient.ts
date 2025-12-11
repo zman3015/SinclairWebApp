@@ -207,3 +207,60 @@ export function useClientSearch(searchTerm: string) {
 
   return { clients, loading, error }
 }
+
+/**
+ * Hook for paginated client list
+ */
+export function useClientsPaginated(limit = 10) {
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<AppError | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [currentLimit, setCurrentLimit] = useState(limit)
+
+  const loadClients = useCallback(async (newLimit?: number) => {
+    setLoading(true)
+    setError(null)
+    const fetchLimit = newLimit || currentLimit
+    const result = await ClientService.getAll(undefined, { limit: fetchLimit + 1 })
+
+    if (result.error) {
+      setError(result.error)
+      setClients([])
+      setHasMore(false)
+    } else {
+      const items = result.data?.items || []
+      if (items.length > fetchLimit) {
+        setClients(items.slice(0, fetchLimit))
+        setHasMore(true)
+      } else {
+        setClients(items)
+        setHasMore(false)
+      }
+    }
+    setLoading(false)
+  }, [currentLimit])
+
+  useEffect(() => {
+    loadClients()
+  }, [loadClients])
+
+  const loadMore = useCallback(() => {
+    const newLimit = currentLimit + limit
+    setCurrentLimit(newLimit)
+    loadClients(newLimit)
+  }, [currentLimit, limit, loadClients])
+
+  const reload = useCallback(() => {
+    loadClients()
+  }, [loadClients])
+
+  return {
+    clients,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    reload
+  }
+}

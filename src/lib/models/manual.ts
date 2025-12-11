@@ -14,11 +14,12 @@ export interface Manual extends BaseDocument {
   manufacturer: string
   model?: string
 
-  // File Info
-  fileUrl: string
+  // File Info - Storage
+  storagePath: string // Path in Firebase Storage: manuals/{manufacturer}/{model}/{docId}.pdf
+  downloadURL: string // Public download URL from Firebase Storage
   fileName: string
-  fileSize?: number
-  mimeType?: string
+  fileSize: number // In bytes
+  mimeType: string
 
   // Version
   version?: string
@@ -40,9 +41,11 @@ export interface Manual extends BaseDocument {
   notes?: string
   thumbnailUrl?: string
 
-  // Usage
+  // Usage & Metadata
   downloadCount?: number
   lastAccessed?: Date
+  uploadedBy?: string
+  uploadedAt: Date
 }
 
 export const ManualSchema = BaseDocumentSchema.extend({
@@ -51,10 +54,11 @@ export const ManualSchema = BaseDocumentSchema.extend({
   manufacturer: z.string().min(1, 'Manufacturer is required'),
   model: z.string().optional(),
 
-  fileUrl: URLSchema,
+  storagePath: z.string().min(1, 'Storage path is required'),
+  downloadURL: URLSchema,
   fileName: z.string().min(1, 'File name is required'),
-  fileSize: z.number().positive().optional(),
-  mimeType: z.string().optional(),
+  fileSize: z.number().positive('File size must be positive'),
+  mimeType: z.string().min(1, 'MIME type is required'),
 
   version: z.string().optional(),
   revisionDate: z.date().optional(),
@@ -72,7 +76,9 @@ export const ManualSchema = BaseDocumentSchema.extend({
   thumbnailUrl: URLSchema.optional(),
 
   downloadCount: z.number().int().nonnegative().optional(),
-  lastAccessed: z.date().optional()
+  lastAccessed: z.date().optional(),
+  uploadedBy: z.string().optional(),
+  uploadedAt: z.date()
 })
 
 export type CreateManualInput = Omit<Manual, keyof BaseDocument>

@@ -13,8 +13,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
+import { useNotifications } from "@/lib/hooks/useNotification"
 import {
   Home,
   QrCode,
@@ -32,7 +34,10 @@ import {
   Menu,
   X,
   Building2,
-  Database
+  Database,
+  Shield,
+  Check,
+  CheckCheck
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -105,6 +110,7 @@ export function TopNav({ className }: TopNavProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, userData, signOut } = useAuth()
   const router = useRouter()
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications(true)
 
   const handleSignOut = async () => {
     await signOut()
@@ -118,6 +124,28 @@ export function TopNav({ className }: TopNavProps) {
       .join('')
       .toUpperCase()
       .slice(0, 2)
+  }
+
+  const handleMarkAsRead = async (notificationId: string) => {
+    await markAsRead(notificationId)
+  }
+
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead()
+  }
+
+  const formatNotificationTime = (date: Date | undefined) => {
+    if (!date) return ''
+    const now = new Date()
+    const diff = now.getTime() - new Date(date).getTime()
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+
+    if (days > 0) return `${days}d ago`
+    if (hours > 0) return `${hours}h ago`
+    if (minutes > 0) return `${minutes}m ago`
+    return 'Just now'
   }
 
   return (
@@ -216,13 +244,17 @@ export function TopNav({ className }: TopNavProps) {
                     </Avatar>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{userData.displayName}</p>
-                      <p className="text-xs text-gray-500">{userData.role === 'admin' ? 'Administrator' : 'Technician'}</p>
+                      <p className="text-xs text-gray-500">
+                        {userData.role === 'admin' ? 'Administrator' : userData.role === 'tech' ? 'Technician' : 'Viewer'}
+                      </p>
                     </div>
                     <Badge variant="secondary" className={cn(
                       "text-xs",
-                      userData.role === 'admin' ? "bg-dental-yellow text-gray-900" : "bg-blue-100 text-blue-800"
+                      userData.role === 'admin' ? "bg-red-100 text-red-800" :
+                      userData.role === 'tech' ? "bg-blue-100 text-blue-800" :
+                      "bg-gray-100 text-gray-800"
                     )}>
-                      {userData.role === 'admin' ? 'Admin' : 'User'}
+                      {userData.role.charAt(0).toUpperCase() + userData.role.slice(1)}
                     </Badge>
                   </div>
                   <DropdownMenuSeparator />
@@ -251,10 +283,19 @@ export function TopNav({ className }: TopNavProps) {
                 </DropdownMenuItem>
               </Link>
 
-              {/* Seed Data (Admin Only) */}
+              {/* Admin Only Section */}
               {userData?.role === 'admin' && (
                 <>
                   <DropdownMenuSeparator />
+                  <Link href="/settings/users">
+                    <DropdownMenuItem className={cn(
+                      "cursor-pointer",
+                      pathname === "/settings/users" && "bg-dental-yellow/20"
+                    )}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      User Management
+                    </DropdownMenuItem>
+                  </Link>
                   <Link href="/seed-data">
                     <DropdownMenuItem className={cn(
                       "cursor-pointer",
@@ -282,15 +323,121 @@ export function TopNav({ className }: TopNavProps) {
           </DropdownMenu>
 
           {/* Notifications */}
-          <Button variant="ghost" size="sm" className="relative hidden sm:flex">
-            <Bell className="h-4 w-4" />
-            <Badge
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-            >
-              3
-            </Badge>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="relative hidden sm:flex">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <div className="flex items-center justify-between p-3 border-b">
+                <h3 className="font-semibold text-sm">Notifications</h3>
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleMarkAllAsRead}
+                    className="h-auto py-1 px-2 text-xs"
+                  >
+                    <CheckCheck className="h-3 w-3 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+              <ScrollArea className="h-[400px]">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-gray-500">
+                    <Bell className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    <p>No notifications</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {notifications.slice(0, 10).map((notification) => (
+                      <div
+                        key={notification.id}
+                        className={cn(
+                          "p-3 hover:bg-gray-50 cursor-pointer transition-colors",
+                          !notification.read && "bg-blue-50/50"
+                        )}
+                        onClick={() => {
+                          if (!notification.read && notification.id) {
+                            handleMarkAsRead(notification.id)
+                          }
+                          if (notification.actionUrl) {
+                            router.push(notification.actionUrl)
+                          }
+                        }}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className={cn(
+                            "flex-shrink-0 w-2 h-2 rounded-full mt-2",
+                            !notification.read ? "bg-blue-600" : "bg-transparent"
+                          )} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between">
+                              <p className={cn(
+                                "text-sm font-medium text-gray-900",
+                                !notification.read && "font-semibold"
+                              )}>
+                                {notification.title}
+                              </p>
+                              {notification.type === 'Warning' && (
+                                <Badge variant="outline" className="ml-2 text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                                  !
+                                </Badge>
+                              )}
+                              {notification.type === 'Error' && (
+                                <Badge variant="outline" className="ml-2 text-xs bg-red-50 text-red-700 border-red-200">
+                                  !
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {notification.body}
+                            </p>
+                            <div className="flex items-center justify-between mt-2">
+                              <p className="text-xs text-gray-400">
+                                {formatNotificationTime(notification.createdAt)}
+                              </p>
+                              {!notification.read && notification.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleMarkAsRead(notification.id!)
+                                  }}
+                                  className="h-auto py-1 px-2 text-xs"
+                                >
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Mark read
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+              {notifications.length > 10 && (
+                <div className="p-2 border-t text-center">
+                  <Button variant="ghost" size="sm" className="text-xs">
+                    View all notifications
+                  </Button>
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Version */}
           <div className="hidden xl:block text-xs text-gray-500">

@@ -1,3 +1,3 @@
-export { app, auth, db, storage, analytics } from './config'
+export { app, auth, db, getStorageInstance, analytics } from './config'
 export * from './converters'
 export * from './errors'

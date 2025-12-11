@@ -37,50 +37,22 @@ import {
   AlertCircle,
   Loader2,
   X,
-  Trash2
+  Trash2,
+  Mail
 } from "lucide-react"
 import { useInvoices, useInvoiceSummary } from "@/lib/hooks/useInvoice"
 import { useClient } from "@/lib/hooks/useClient"
-import { useToast } from "@/hooks/useToast"
+import { useAuth } from "@/contexts/AuthContext"
+import { sendInvoiceEmail } from "@/lib/email"
+import { toast } from "sonner"
 import type { Invoice, CreateInvoiceInput } from "@/lib/models/invoice"
-
-// Toast container component
-interface ToastType {
-  id: string
-  type: 'success' | 'error' | 'info'
-  message: string
-}
-
-function ToastContainer({ toasts, onRemove }: { toasts: ToastType[], onRemove: (id: string) => void }) {
-  if (toasts.length === 0) return null
-
-  return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
-      {toasts.map(toast => (
-        <div
-          key={toast.id}
-          className={`px-4 py-3 rounded-lg shadow-lg flex items-center justify-between min-w-[300px] ${
-            toast.type === 'success' ? 'bg-green-600 text-white' :
-            toast.type === 'error' ? 'bg-red-600 text-white' :
-            'bg-blue-600 text-white'
-          }`}
-        >
-          <span>{toast.message}</span>
-          <button onClick={() => onRemove(toast.id)} className="ml-4">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 export default function Invoices() {
   const [activeTab, setActiveTab] = useState<"create" | "list">("list")
   const { invoices, loading, error, saving, create, update, markAsPaid, remove } = useInvoices()
   const { clients } = useClient()
   const { stats, loading: statsLoading } = useInvoiceSummary()
-  const toast = useToast()
+  const { user, userData } = useAuth()
 
   // State for mark as paid dialog
   const [markPaidDialog, setMarkPaidDialog] = useState<{
@@ -102,6 +74,19 @@ export default function Invoices() {
   }>({
     open: false,
     invoice: null
+  })
+
+  // State for email dialog
+  const [emailDialog, setEmailDialog] = useState<{
+    open: boolean
+    invoice: Invoice | null
+    recipientEmail: string
+    sending: boolean
+  }>({
+    open: false,
+    invoice: null,
+    recipientEmail: '',
+    sending: false
   })
 
   // Invoice form state
@@ -336,26 +321,26 @@ export default function Invoices() {
               ${invoice.lineItems.map(item => `
                 <tr>
                   <td>${item.description}</td>
-                  <td>${item.quantity}</td>
-                  <td>$${item.unitPrice.toFixed(2)}</td>
-                  <td>$${item.total.toFixed(2)}</td>
+                  <td>${item.quantity || 0}</td>
+                  <td>${(item.unitPrice || 0).toFixed(2)}</td>
+                  <td>${(item.total || 0).toFixed(2)}</td>
                 </tr>
               `).join('')}
               <tr class="total-row">
                 <td colspan="3">Subtotal</td>
-                <td>$${invoice.subtotal.toFixed(2)}</td>
+                <td>${(invoice.subtotal || 0).toFixed(2)}</td>
               </tr>
               <tr class="total-row">
                 <td colspan="3">Tax</td>
-                <td>$${invoice.tax.toFixed(2)}</td>
+                <td>${(invoice.tax || 0).toFixed(2)}</td>
               </tr>
               <tr class="total-row">
                 <td colspan="3">Total</td>
-                <td>$${invoice.total.toFixed(2)}</td>
+                <td>${(invoice.total || 0).toFixed(2)}</td>
               </tr>
               <tr class="total-row">
                 <td colspan="3">Amount Due</td>
-                <td>$${invoice.amountDue.toFixed(2)}</td>
+                <td>${(invoice.amountDue || 0).toFixed(2)}</td>
               </tr>
             </tbody>
           </table>
@@ -367,6 +352,83 @@ export default function Invoices() {
 
     printWindow.document.close()
     printWindow.print()
+  }
+
+  // Handle email invoice
+  const handleEmailInvoice = async () => {
+    if (!emailDialog.invoice || !emailDialog.recipientEmail) {
+      toast.error("Please enter a recipient email")
+      return
+    }
+
+    if (!user || !userData) {
+      toast.error("You must be logged in to send emails")
+      return
+    }
+
+    // Check role permission
+    if (userData.role !== 'admin' && userData.role !== 'tech') {
+      toast.error("Only admins and technicians can send emails")
+      return
+    }
+
+    setEmailDialog(prev => ({ ...prev, sending: true }))
+
+    try {
+      // Generate PDF
+      const pdfResponse = await fetch('/api/invoice/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailDialog.invoice)
+      })
+
+      if (!pdfResponse.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+
+      const pdfBlob = await pdfResponse.blob()
+      const pdfBase64 = await blobToBase64(pdfBlob)
+
+      // Send email
+      const result = await sendInvoiceEmail(
+        emailDialog.invoice,
+        emailDialog.recipientEmail,
+        pdfBase64,
+        {
+          email: user.email || '',
+          role: userData.role,
+          uid: user.uid
+        }
+      )
+
+      if (result.success) {
+        toast.success(`Invoice emailed successfully to ${emailDialog.recipientEmail}`)
+        setEmailDialog({ open: false, invoice: null, recipientEmail: '', sending: false })
+      } else {
+        toast.error(result.error || 'Failed to send email')
+      }
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const error = err;
+      console.error('Error emailing invoice:', error)
+      toast.error(error.message || 'Failed to email invoice')
+    } finally {
+      setEmailDialog(prev => ({ ...prev, sending: false }))
+    }
+  }
+
+  // Helper to convert blob to base64
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        // Remove data:application/pdf;base64, prefix
+        const base64Data = base64.split(',')[1]
+        resolve(base64Data)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
   }
 
   const getStatusColor = (status: string) => {
@@ -393,7 +455,6 @@ export default function Invoices() {
       title="Invoice Management"
       subtitle="Create, track, and manage service invoices"
     >
-      <ToastContainer toasts={toast.toasts} onRemove={toast.remove} />
 
       <div className="space-y-6">
         {/* Tab Navigation */}
@@ -429,7 +490,7 @@ export default function Invoices() {
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Total Outstanding</p>
                       <p className="text-2xl font-bold text-dental-blue">
-                        {statsLoading ? '...' : `$${stats.totalOutstanding.toFixed(2)}`}
+                        {statsLoading ? '...' : `${(stats.totalOutstanding || 0).toFixed(2)}`}
                       </p>
                     </div>
                   </div>
@@ -442,7 +503,7 @@ export default function Invoices() {
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Paid This Month</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {statsLoading ? '...' : `$${stats.paidThisMonth.toFixed(2)}`}
+                        {statsLoading ? '...' : `${(stats.paidThisMonth || 0).toFixed(2)}`}
                       </p>
                     </div>
                   </div>
@@ -455,7 +516,7 @@ export default function Invoices() {
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Pending</p>
                       <p className="text-2xl font-bold text-yellow-600">
-                        {statsLoading ? '...' : `$${stats.pending.toFixed(2)}`}
+                        {statsLoading ? '...' : `${(stats.pending || 0).toFixed(2)}`}
                       </p>
                     </div>
                   </div>
@@ -468,7 +529,7 @@ export default function Invoices() {
                     <div className="ml-4">
                       <p className="text-sm font-medium text-gray-600">Overdue</p>
                       <p className="text-2xl font-bold text-red-600">
-                        {statsLoading ? '...' : `$${stats.overdue.toFixed(2)}`}
+                        {statsLoading ? '...' : `${(stats.overdue || 0).toFixed(2)}`}
                       </p>
                     </div>
                   </div>
@@ -506,7 +567,7 @@ export default function Invoices() {
                             </div>
                             <div className="text-right">
                               <p className="text-lg font-bold text-dental-blue">
-                                ${invoice.total.toFixed(2)}
+                                ${(invoice.total || 0).toFixed(2)}
                               </p>
                               <Badge className={getStatusColor(invoice.status)}>
                                 {invoice.status}
@@ -525,7 +586,7 @@ export default function Invoices() {
                             </div>
                             <div>
                               <p className="font-medium text-gray-700">Amount Due</p>
-                              <p className="font-semibold">${invoice.amountDue.toFixed(2)}</p>
+                              <p className="font-semibold">${(invoice.amountDue || 0).toFixed(2)}</p>
                             </div>
                           </div>
 
@@ -537,6 +598,20 @@ export default function Invoices() {
                             >
                               <Download className="h-4 w-4 mr-2" />
                               PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEmailDialog({
+                                open: true,
+                                invoice,
+                                recipientEmail: '',
+                                sending: false
+                              })}
+                              disabled={!userData || (userData.role !== 'admin' && userData.role !== 'tech')}
+                            >
+                              <Mail className="h-4 w-4 mr-2" />
+                              Email
                             </Button>
                             {invoice.status !== 'Paid' && (
                               <Button
@@ -886,6 +961,66 @@ export default function Invoices() {
                 <>
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Mark as Paid
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Invoice Dialog */}
+      <Dialog open={emailDialog.open} onOpenChange={(open) =>
+        setEmailDialog({ ...emailDialog, open })
+      }>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email Invoice</DialogTitle>
+            <DialogDescription>
+              Send invoice {emailDialog.invoice?.invoiceNumber} via email
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="recipientEmail">Recipient Email *</Label>
+              <Input
+                id="recipientEmail"
+                type="email"
+                value={emailDialog.recipientEmail}
+                onChange={(e) =>
+                  setEmailDialog({ ...emailDialog, recipientEmail: e.target.value })
+                }
+                placeholder="client@example.com"
+              />
+            </div>
+            {emailDialog.invoice && (
+              <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                <p><strong>Invoice:</strong> {emailDialog.invoice.invoiceNumber}</p>
+                <p><strong>Client:</strong> {emailDialog.invoice.clientName}</p>
+                <p><strong>Amount:</strong> ${(emailDialog.invoice.total || 0).toFixed(2)}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEmailDialog({ open: false, invoice: null, recipientEmail: '', sending: false })}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEmailInvoice}
+              disabled={emailDialog.sending || !emailDialog.recipientEmail}
+              className="bg-dental-blue hover:bg-dental-blue/90"
+            >
+              {emailDialog.sending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Email
                 </>
               )}
             </Button>

@@ -11,7 +11,7 @@ export type NotificationCategory = 'Service Due' | 'Invoice Due' | 'Equipment Al
 export interface Notification extends BaseDocument {
   // Basic Info
   title: string
-  message: string
+  body: string
   type: NotificationType
   category: NotificationCategory
   priority: Priority
@@ -27,8 +27,8 @@ export interface Notification extends BaseDocument {
   dismissedAt?: Date
 
   // Related Records
-  relatedEntityType?: string // 'client', 'equipment', 'invoice', etc.
-  relatedEntityId?: string
+  relatedType?: string // 'client', 'equipment', 'invoice', 'appointment', etc.
+  relatedId?: string
 
   // Action
   actionUrl?: string
@@ -44,7 +44,7 @@ export interface Notification extends BaseDocument {
 
 export const NotificationSchema = BaseDocumentSchema.extend({
   title: z.string().min(1, 'Title is required'),
-  message: z.string().min(1, 'Message is required'),
+  body: z.string().min(1, 'Body is required'),
   type: z.enum(['Info', 'Warning', 'Error', 'Success', 'Reminder']).default('Info'),
   category: z.enum(['Service Due', 'Invoice Due', 'Equipment Alert', 'Appointment', 'System', 'General']).default('General'),
   priority: PrioritySchema.default('Medium'),
@@ -57,8 +57,8 @@ export const NotificationSchema = BaseDocumentSchema.extend({
   dismissed: z.boolean().default(false),
   dismissedAt: z.date().optional(),
 
-  relatedEntityType: z.string().optional(),
-  relatedEntityId: z.string().optional(),
+  relatedType: z.string().optional(),
+  relatedId: z.string().optional(),
 
   actionUrl: z.string().optional(),
   actionLabel: z.string().optional(),

@@ -136,6 +136,46 @@ class ServiceHistoryServiceClass extends BaseService<ServiceHistory> {
     const total = filtered.reduce((sum, service) => sum + (service.totalCost || 0), 0)
     return { data: total }
   }
+
+  /**
+   * Get recent services (last N items)
+   */
+  async getRecent(limit = 10): Promise<ServiceResult<ServiceHistory[]>> {
+    const result = await this.getAll(undefined, {
+      limit,
+      orderByField: 'completedDate',
+      orderByDirection: 'desc'
+    })
+    if (result.error) {
+      return { error: result.error }
+    }
+    return { data: result.data?.items || [] }
+  }
+
+  /**
+   * Get service breakdown by type
+   */
+  async getServiceBreakdown(): Promise<ServiceResult<Array<{ type: string; count: number }>>> {
+    const result = await this.getAll()
+    if (result.error) {
+      return { error: result.error }
+    }
+
+    const services = result.data?.items || []
+    const breakdown: Record<string, number> = {}
+
+    services.forEach(service => {
+      const type = service.type || 'Unknown'
+      breakdown[type] = (breakdown[type] || 0) + 1
+    })
+
+    const data = Object.entries(breakdown).map(([type, count]) => ({
+      type,
+      count
+    }))
+
+    return { data }
+  }
 }
 
 export const ServiceHistoryService = new ServiceHistoryServiceClass()

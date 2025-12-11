@@ -30,8 +30,18 @@ console.log('🔥 Firebase Auth initialized')
 const db: Firestore = getFirestore(app)
 console.log('🔥 Firestore initialized')
 
-const storage: FirebaseStorage = getStorage(app)
-console.log('🔥 Storage initialized')
+// Initialize Storage only in browser (uses browser-only APIs)
+let storage: FirebaseStorage | null = null
+const getStorageInstance = (): FirebaseStorage => {
+  if (typeof window === 'undefined') {
+    throw new Error('Firebase Storage can only be accessed in the browser')
+  }
+  if (!storage) {
+    storage = getStorage(app)
+    console.log('🔥 Storage initialized')
+  }
+  return storage
+}
 
 // Initialize Analytics only in browser and if supported
 let analytics: Analytics | null = null
@@ -45,4 +55,4 @@ if (typeof window !== 'undefined') {
   })
 }
 
-export { app, auth, db, storage, analytics }
+export { app, auth, db, getStorageInstance, analytics }
