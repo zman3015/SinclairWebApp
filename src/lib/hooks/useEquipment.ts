@@ -97,7 +97,7 @@ export function useEquipmentByQR(qrCode?: string) {
       if (result.error) {
         setError(result.error)
       } else {
-        setEquipment(result.data)
+        setEquipment(result.data || null)
       }
       setLoading(false)
     }

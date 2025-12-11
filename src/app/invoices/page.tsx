@@ -45,7 +45,13 @@ import { useToast } from "@/hooks/useToast"
 import type { Invoice, CreateInvoiceInput } from "@/lib/models/invoice"
 
 // Toast container component
-function ToastContainer({ toasts, onRemove }: { toasts: any[], onRemove: (id: string) => void }) {
+interface ToastType {
+  id: string
+  type: 'success' | 'error' | 'info'
+  message: string
+}
+
+function ToastContainer({ toasts, onRemove }: { toasts: ToastType[], onRemove: (id: string) => void }) {
   if (toasts.length === 0) return null
 
   return (

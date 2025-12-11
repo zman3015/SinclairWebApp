@@ -12,8 +12,10 @@ export function useHarpInspections(clientId?: string) {
         ? await HarpInspectionService.getByClientId(clientId)
         : await HarpInspectionService.getAll()
 
-      if (!result.error) {
-        setInspections(result.data?.items || result.data || [])
+      if (!result.error && result.data) {
+        // Handle both array and paginated result
+        const items = Array.isArray(result.data) ? result.data : result.data.items
+        setInspections(items || [])
       }
       setLoading(false)
     }
